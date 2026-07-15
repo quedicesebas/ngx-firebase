@@ -1,59 +1,132 @@
-# NgxFirebase
+# @ngx-firebase
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 22.0.6.
+A lightweight, drop-in, and zoneless-friendly wrapper around the native **Firebase JS SDK** for **Angular 22+**.
 
-## Development server
+This library serves as a modern, boilerplate-free alternative to `@angular/fire`, providing native Angular Dependency Injection (DI) class tokens and reactive RxJS wrappers around standard Firebase listeners.
 
-To start a local development server, run:
+---
 
-```bash
-ng serve
-```
+## ⚡ Features
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+- 📦 **Zero overhead**: Communicates directly with the Firebase JS SDK without complex wrappers.
+- 💉 **Native Angular DI**: Standard provider functions (`provideFirestore`, `provideAuth`, etc.) compatible with Angular's `ApplicationConfig`.
+- 🎭 **RxJS Wrappers**: Lightweight, memory-leak-safe wrappers for common tasks (`docData`, `collectionSnapshots`, `user`).
+- ⏱️ **Zoneless Friendly**: Uses native SDK snapshot listeners wrapped in RxJS observable streams.
+- 📊 **Screen Tracking**: Custom built-in `ScreenTrackingService` for automated Google Analytics route tracking.
 
-## Code scaffolding
+---
 
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+## 📦 Installation
 
-```bash
-ng generate component component-name
-```
-
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+Install both the library and the native Firebase SDK:
 
 ```bash
-ng generate --help
+npm install ngx-firebase firebase
 ```
 
-## Building
+---
 
-To build the project run:
+## 🚀 Quick Start
 
-```bash
-ng build
+### 1. Configure Providers
+
+Register the Firebase services in your `app.config.ts` using the functional providers:
+
+```typescript
+import { ApplicationConfig } from '@angular/core';
+import { provideRouter } from '@angular/router';
+import { initializeApp } from 'firebase/app';
+import { getAuth } from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
+import { 
+  provideFirebaseApp, 
+  provideAuth, 
+  provideFirestore 
+} from 'ngx-firebase';
+
+import { routes } from './app.routes';
+
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideRouter(routes),
+    
+    // Initialize Firebase App
+    provideFirebaseApp(() => initializeApp({
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_AUTH_DOMAIN",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_STORAGE_BUCKET",
+      messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+      appId: "YOUR_APP_ID",
+      measurementId: "YOUR_MEASUREMENT_ID"
+    })),
+    
+    // Provide Firestore & Auth
+    provideFirestore(() => getFirestore()),
+    provideAuth(() => getAuth())
+  ]
+};
 ```
 
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
+### 2. Using Services in Standalone Components
 
-## Running unit tests
+Inject the native Firebase instances directly using the provided tokens, and use the RxJS helpers:
 
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
+```typescript
+import { Component, inject } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { Firestore, doc } from 'firebase/firestore';
+import { docData } from 'ngx-firebase';
+import { Observable } from 'rxjs';
 
-```bash
-ng test
+@Component({
+  selector: 'app-store-detail',
+  standalone: true,
+  imports: [CommonModule],
+  template: `
+    <div *ngIf="store$ | async as store">
+      <h1>{{ store.name }}</h1>
+      <p>{{ store.description }}</p>
+    </div>
+  `
+})
+export class StoreDetailComponent {
+  private firestore = inject(Firestore);
+  store$: Observable<any>;
+
+  constructor() {
+    // Reference a document using the native Firestore SDK
+    const storeRef = doc(this.firestore, 'stores/store_123');
+    
+    // Wrap it reactively using docData
+    this.store$ = docData(storeRef);
+  }
+}
 ```
 
-## Running end-to-end tests
+### 3. Track Route Page Views Automatically (Google Analytics)
 
-For end-to-end (e2e) testing, run:
+To enable automatic page view tracking, register `provideAnalytics` and inject `ScreenTrackingService` in your client config:
 
-```bash
-ng e2e
+```typescript
+import { ApplicationConfig, provideEnvironmentInitializer, inject } from '@angular/core';
+import { getAnalytics } from 'firebase/analytics';
+import { provideAnalytics, ScreenTrackingService } from 'ngx-firebase';
+
+export const clientConfig: ApplicationConfig = {
+  providers: [
+    provideAnalytics(() => getAnalytics()),
+    ScreenTrackingService,
+    provideEnvironmentInitializer(() => {
+      // Force service initialization to listen to router events
+      inject(ScreenTrackingService);
+    })
+  ]
+};
 ```
 
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
+---
 
-## Additional Resources
+## 📄 License
 
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+MIT © 2026 Sebas (quedicesebas)
