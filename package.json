@@ -1,12 +1,16 @@
 {
   "name": "ngx-firebase",
   "version": "0.0.0",
+  "workspaces": [
+    "projects/ngx-firebase"
+  ],
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
-    "build": "ng build",
+    "build": "ng build && node -e \"const fs = require('fs'); ['README.md', 'LICENSE'].forEach(f => { if (fs.existsSync(f)) fs.copyFileSync(f, 'dist/ngx-firebase/' + f); })\"",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test"
+    "test": "ng test",
+    "release": "npm version --no-git-tag-version -w ngx-firebase"
   },
   "private": true,
   "packageManager": "npm@11.1.0",

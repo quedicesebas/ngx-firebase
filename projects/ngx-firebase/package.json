@@ -1,6 +1,6 @@
 {
   "name": "ngx-firebase",
-  "version": "22.0.0",
+  "version": "22.0.1",
   "description": "A lightweight, drop-in, and zoneless-friendly wrapper around the native Firebase JS SDK for Angular 22+.",
   "keywords": [
     "angular",
@@ -21,7 +21,6 @@
     "url": "git+https://github.com/quedicesebas/ngx-firebase.git"
   },
   "license": "MIT",
-  "author": "Sebas <quedicesebas>",
   "publishConfig": {
     "access": "public"
   },
