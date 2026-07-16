@@ -1,0 +1,95 @@
+name: Publish Packages
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      force_publish_all:
+        description: "Force publish all packages (skips version check)"
+        type: boolean
+        default: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Get current versions
+        id: current_versions
+        run: |
+          echo "ngx_firebase=$(node -p "require('./projects/ngx-firebase/package.json').version")" >> $GITHUB_OUTPUT
+
+      - name: Get previous versions
+        id: previous_versions
+        run: |
+          git fetch --prune --unshallow || true
+          if git rev-parse HEAD~1 >/dev/null 2>&1; then
+            echo "ngx_firebase=$(git show HEAD~1:projects/ngx-firebase/package.json | node -p "JSON.parse(require('fs').readFileSync(0)).version")" >> $GITHUB_OUTPUT
+          else
+            echo "ngx_firebase=0.0.0" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check if versions changed
+        id: version_check
+        run: |
+          if [ "${{ steps.current_versions.outputs.ngx_firebase }}" != "${{ steps.previous_versions.outputs.ngx_firebase }}" ]; then
+            echo "ngx_firebase_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "ngx_firebase_changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check existence on NPM and GitHub
+        id: existence_check
+        run: |
+          if npm view ngx-firebase@${{ steps.current_versions.outputs.ngx_firebase }} version >/dev/null 2>&1; then
+            echo "ngx_firebase_npm_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "ngx_firebase_npm_exists=false" >> $GITHUB_OUTPUT
+          fi
+          if gh release view "ngx-firebase@v${{ steps.current_versions.outputs.ngx_firebase }}" >/dev/null 2>&1; then
+            echo "ngx_firebase_gh_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "ngx_firebase_gh_exists=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install dependencies
+        if: (steps.version_check.outputs.ngx_firebase_changed == 'true' || github.event.inputs.force_publish_all == 'true') && (steps.existence_check.outputs.ngx_firebase_npm_exists == 'false' || steps.existence_check.outputs.ngx_firebase_gh_exists == 'false')
+        run: npm ci
+
+      - name: Build ngx-firebase
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && (steps.version_check.outputs.ngx_firebase_changed == 'true' || github.event.inputs.force_publish_all == 'true') && (steps.existence_check.outputs.ngx_firebase_npm_exists == 'false' || steps.existence_check.outputs.ngx_firebase_gh_exists == 'false')
+        run: npm run build ngx-firebase
+
+      - name: Publish ngx-firebase
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && (steps.version_check.outputs.ngx_firebase_changed == 'true' || github.event.inputs.force_publish_all == 'true') && steps.existence_check.outputs.ngx_firebase_npm_exists == 'false'
+        run: npm publish --provenance
+        working-directory: ./dist/ngx-firebase
+
+      - name: Create Release ngx-firebase
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && (steps.version_check.outputs.ngx_firebase_changed == 'true' || github.event.inputs.force_publish_all == 'true') && steps.existence_check.outputs.ngx_firebase_gh_exists == 'false'
+        run: |
+          PREVIOUS_TAG=$(git describe --tags --match "ngx-firebase@*" --abbrev=0 2>/dev/null || git rev-list --max-parents=0 HEAD)
+          CHANGES=$(git log $PREVIOUS_TAG..HEAD --oneline -- projects/ngx-firebase)
+          gh release create "ngx-firebase@v${{ steps.current_versions.outputs.ngx_firebase }}" \
+            --title "ngx-firebase v${{ steps.current_versions.outputs.ngx_firebase }}" \
+            --notes "### Cambios en esta versión:
+            $CHANGES"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
